@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import defaultStore from '../data/store.json';
+import defaultProducts from '../data/products.json';
+import defaultSettings from '../data/settings.json';
+import defaultUsers from '../data/users.json';
 import { FaPlus, FaTrash, FaBox, FaChartBar, FaEye, FaUpload, FaLink, FaSmile } from 'react-icons/fa';
+import AddProductForm from '../components/AddProductForm';
 import './AdminPage.css';
 
 const getProducts = () => {
   const data = localStorage.getItem('crackers_db');
   if (!data) {
-    localStorage.setItem('crackers_db', JSON.stringify(defaultStore.products));
-    return [...defaultStore.products];
+    localStorage.setItem('crackers_db', JSON.stringify(defaultProducts));
+    return [...defaultProducts];
   }
   return JSON.parse(data);
 };
@@ -15,17 +18,17 @@ const getProducts = () => {
 const getSettings = () => {
   const data = localStorage.getItem('crackers_settings');
   if (!data) {
-    localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-    return { ...defaultStore.settings };
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   return JSON.parse(data);
 };
 
 const syncWithServer = async (updatedFields = {}) => {
   try {
-    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultStore.products;
-    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultStore.settings;
-    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultStore.users;
+    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultProducts;
+    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultSettings;
+    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultUsers;
     
     await fetch('/api/store', {
       method: 'POST',
@@ -55,7 +58,7 @@ const deleteProduct = (id) => {
   syncWithServer({ products });
 };
 
-const CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
+const DEFAULT_CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
 
 function renderProductImage(image) {
   if (image && (image.startsWith('http') || image.startsWith('data:image') || image.startsWith('/'))) {
@@ -68,9 +71,8 @@ function AdminPage() {
   const [products, setProducts] = useState([]);
   const [settings, setSettings] = useState({});
   const [activeTab, setActiveTab] = useState('view');
-  const [imageType, setImageType] = useState('emoji'); // 'emoji', 'upload', 'url'
-  const [form, setForm] = useState({ name: '', category: 'Sparklers', price: '', stock: '', image: '🎆', description: '', rating: 4.0, featured: false });
   const [toast, setToast] = useState(null);
+  const [newCategory, setNewCategory] = useState('');
 
   const loadData = () => {
     setProducts(getProducts());
@@ -89,20 +91,45 @@ function AdminPage() {
   };
 
   // Only show categories enabled by developer
-  const visibleCats = settings.visibleCategories || CATEGORIES;
-  const activeCats = CATEGORIES.filter((c) => visibleCats.includes(c));
+  const activeCategories = settings.categories || DEFAULT_CATEGORIES;
+  const visibleCats = settings.visibleCategories || activeCategories;
+  const activeCats = activeCategories.filter((c) => visibleCats.includes(c));
 
   // Filter products to only visible categories
   const visibleProducts = products.filter((p) => visibleCats.includes(p.category));
 
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!form.name || !form.price) return showToast('Fill name & price!', 'error');
-    addProduct({ ...form, price: Number(form.price), stock: Number(form.stock), rating: Number(form.rating) });
-    setForm({ name: '', category: activeCats[0] || 'Sparklers', price: '', stock: '', image: '🎆', description: '', rating: 4.0, featured: false });
-    setImageType('emoji');
+  const handleAdd = (product) => {
+    addProduct(product);
     showToast('Product added! ✅');
     setActiveTab('view');
+  };
+
+  const handleAddCategory = (e) => {
+    e.preventDefault();
+    if (!newCategory.trim()) return;
+    const cat = newCategory.trim();
+    if (activeCategories.includes(cat)) return showToast('Category already exists!', 'error');
+    const updated = [...activeCategories, cat];
+    const ns = { ...settings, categories: updated, visibleCategories: [...(settings.visibleCategories || activeCategories), cat] };
+    setSettings(ns);
+    localStorage.setItem('crackers_settings', JSON.stringify(ns));
+    window.dispatchEvent(new Event('store-updated'));
+    syncWithServer({ settings: ns });
+    setNewCategory('');
+    showToast(`Category "${cat}" added successfully! ✅`);
+  };
+
+  const handleDeleteCategory = (cat) => {
+    if (window.confirm(`Are you sure you want to delete the category "${cat}"?`)) {
+      const updated = activeCategories.filter(c => c !== cat);
+      const updatedVisible = (settings.visibleCategories || activeCategories).filter(c => c !== cat);
+      const ns = { ...settings, categories: updated, visibleCategories: updatedVisible };
+      setSettings(ns);
+      localStorage.setItem('crackers_settings', JSON.stringify(ns));
+      window.dispatchEvent(new Event('store-updated'));
+      syncWithServer({ settings: ns });
+      showToast(`Category "${cat}" deleted! 🗑️`);
+    }
   };
 
   const handleDelete = (id, name) => {
@@ -112,37 +139,34 @@ function AdminPage() {
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 1024 * 1024 * 2) {
-        showToast('Image must be under 2MB', 'error');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setForm((prev) => ({ ...prev, image: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const totalValue = visibleProducts.reduce((s, p) => s + p.price * p.stock, 0);
-  const emojis = ['🎆', '🎇', '🚀', '💥', '🧨', '🌺', '🎡', '⛲', '💨', '⭐', '🦋', '✏️', '🔥', '✨', '🎉'];
 
   return (
     <div className="admin-page">
       <div className="admin-header">
-        <h1><FaBox /> {settings.siteName || 'Admin Panel'} — Admin</h1>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {settings.logo ? (
+            <img src={settings.logo} alt="Logo" style={{ maxHeight: '40px', objectFit: 'contain' }} />
+          ) : (
+            <FaBox />
+          )}
+          <span>{settings.siteName || 'Admin Panel'} — Admin</span>
+        </h1>
         <p>Manage your crackers inventory</p>
       </div>
 
       {/* Stats */}
       <div className="admin-stats">
         <div className="stat-card"><span className="stat-value">{visibleProducts.length}</span><span className="stat-label">Products</span></div>
-        <div className="stat-card"><span className="stat-value">{activeCats.length}</span><span className="stat-label">Categories</span></div>
-        <div className="stat-card"><span className="stat-value">{visibleProducts.reduce((s, p) => s + p.stock, 0)}</span><span className="stat-label">Total Stock</span></div>
-        <div className="stat-card"><span className="stat-value">₹{totalValue.toLocaleString()}</span><span className="stat-label">Inventory Value</span></div>
+        {settings.enableCategories !== false && (
+          <div className="stat-card"><span className="stat-value">{activeCats.length}</span><span className="stat-label">Categories</span></div>
+        )}
+        {settings.enableStock !== false && (
+          <>
+            <div className="stat-card"><span className="stat-value">{visibleProducts.reduce((s, p) => s + p.stock, 0)}</span><span className="stat-label">Total Stock</span></div>
+            <div className="stat-card"><span className="stat-value">₹{totalValue.toLocaleString()}</span><span className="stat-label">Inventory Value</span></div>
+          </>
+        )}
       </div>
 
       {/* Tabs */}
@@ -150,15 +174,32 @@ function AdminPage() {
         <button className={`admin-tab ${activeTab === 'view' ? 'active' : ''}`} onClick={() => setActiveTab('view')}><FaEye /> View Products</button>
         <button className={`admin-tab ${activeTab === 'add' ? 'active' : ''}`} onClick={() => setActiveTab('add')}><FaPlus /> Add Product</button>
         <button className={`admin-tab ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><FaChartBar /> Statistics</button>
+        <button className={`admin-tab ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => setActiveTab('categories')}><FaBox /> Categories</button>
       </div>
 
       {/* View Products */}
       {activeTab === 'view' && (
         <div className="admin-content">
+          {visibleProducts.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+              <button 
+                className="btn-delete" 
+                onClick={() => {
+                  if(window.confirm('Are you sure you want to delete ALL products? This action cannot be undone.')) {
+                    localStorage.setItem('crackers_db', JSON.stringify([]));
+                    window.dispatchEvent(new Event('store-updated'));
+                  }
+                }} 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+              >
+                <FaTrash /> Delete All Products
+              </button>
+            </div>
+          )}
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
-                <tr><th>Icon / Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Rating</th><th>Featured</th><th>Action</th></tr>
+                <tr><th>Icon / Image</th><th>Name</th>{settings.enableCategories !== false && <th>Category</th>}<th>Price</th>{settings.enableStock !== false && <th>Stock</th>}<th>Rating</th><th>Featured</th><th>Action</th></tr>
               </thead>
               <tbody>
                 {visibleProducts.map((p) => (
@@ -167,9 +208,9 @@ function AdminPage() {
                       {renderProductImage(p.image)}
                     </td>
                     <td className="td-name">{p.name}</td>
-                    <td><span className="td-category">{p.category}</span></td>
+                    {settings.enableCategories !== false && <td><span className="td-category">{p.category}</span></td>}
                     <td className="td-price">₹{p.price}</td>
-                    <td>{p.stock}</td>
+                    {settings.enableStock !== false && <td>{p.stock}</td>}
                     <td className="td-rating">⭐ {p.rating}</td>
                     <td>{p.featured ? '✅' : '—'}</td>
                     <td>
@@ -188,61 +229,11 @@ function AdminPage() {
       {/* Add Product */}
       {activeTab === 'add' && (
         <div className="admin-content">
-          <form className="add-form" onSubmit={handleAdd}>
-            <div className="form-group">
-              <label>Choose Image Method</label>
-              <div className="image-type-selector" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <button type="button" className={`btn-type-selector ${imageType === 'emoji' ? 'active' : ''}`} onClick={() => { setImageType('emoji'); setForm({ ...form, image: '🎆' }); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: imageType === 'emoji' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'white', cursor: 'pointer', transition: 'var(--transition)' }}><FaSmile /> Emoji Icon</button>
-                <button type="button" className={`btn-type-selector ${imageType === 'upload' ? 'active' : ''}`} onClick={() => { setImageType('upload'); setForm({ ...form, image: '' }); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: imageType === 'upload' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'white', cursor: 'pointer', transition: 'var(--transition)' }}><FaUpload /> Upload Image</button>
-                <button type="button" className={`btn-type-selector ${imageType === 'url' ? 'active' : ''}`} onClick={() => { setImageType('url'); setForm({ ...form, image: '' }); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: imageType === 'url' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'white', cursor: 'pointer', transition: 'var(--transition)' }}><FaLink /> Image URL</button>
-              </div>
-
-              {imageType === 'emoji' && (
-                <div className="emoji-picker">
-                  {emojis.map((e) => (
-                    <button type="button" key={e} className={`emoji-btn ${form.image === e ? 'active' : ''}`} onClick={() => setForm({ ...form, image: e })}>{e}</button>
-                  ))}
-                </div>
-              )}
-
-              {imageType === 'upload' && (
-                <div className="file-uploader-wrap" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border)' }}>
-                  <input type="file" accept="image/*" onChange={handleFileChange} style={{ cursor: 'pointer' }} />
-                  {form.image && (
-                    <div className="upload-preview" style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                      <img src={form.image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {imageType === 'url' && (
-                <div className="url-uploader-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <input type="text" placeholder="https://example.com/cracker.jpg" value={form.image.startsWith('data:') ? '' : form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }} />
-                  {form.image && !form.image.startsWith('data:') && (
-                    <div className="upload-preview" style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', marginTop: '8px' }}>
-                      <img src={form.image} alt="Preview" onError={(e) => { e.target.style.display = 'none'; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="form-row">
-              <div className="form-group"><label>Product Name *</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Sky Rocket" /></div>
-              <div className="form-group"><label>Category</label><select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{activeCats.map((c) => <option key={c}>{c}</option>)}</select></div>
-            </div>
-            <div className="form-row">
-              <div className="form-group"><label>Price (₹) *</label><input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="150" /></div>
-              <div className="form-group"><label>Stock</label><input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="100" /></div>
-              <div className="form-group"><label>Rating</label><input type="number" step="0.1" min="0" max="5" value={form.rating} onChange={(e) => setForm({ ...form, rating: e.target.value })} /></div>
-            </div>
-            <div className="form-group"><label>Description</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the product..." rows={3} /></div>
-            <div className="form-group form-check">
-              <label><input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} /> Featured Product</label>
-            </div>
-            <button type="submit" className="btn-submit"><FaPlus /> Add Product</button>
-          </form>
+          <AddProductForm 
+            categories={activeCats} 
+            settings={settings} 
+            onAdd={handleAdd} 
+          />
         </div>
       )}
 
@@ -257,7 +248,9 @@ function AdminPage() {
                   <h3>{cat}</h3>
                   <div className="stats-info">
                     <p><strong>{catProducts.length}</strong> products</p>
-                    <p><strong>{catProducts.reduce((s, p) => s + p.stock, 0)}</strong> stock</p>
+                    {settings.enableStock !== false && (
+                      <p><strong>{catProducts.reduce((s, p) => s + p.stock, 0)}</strong> stock</p>
+                    )}
                     <p><strong>₹{catProducts.reduce((s, p) => s + p.price, 0)}</strong> total price</p>
                   </div>
                   <div className="stats-bar">
@@ -271,6 +264,41 @@ function AdminPage() {
       )}
 
       {/* Toast */}
+      {/* Categories */}
+      {activeTab === 'categories' && (
+        <div className="admin-content">
+          <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlus /> Add New Category</h4>
+            <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '12px' }}>
+              <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Gift Boxes" style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none' }} />
+              <button type="submit" className="btn-submit" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlus /> Add</button>
+            </form>
+          </div>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr><th>Category Name</th><th>Products Count</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {activeCategories.map((cat) => {
+                  const catProducts = products.filter((p) => p.category === cat);
+                  return (
+                    <tr key={cat}>
+                      <td className="td-name"><strong>{cat}</strong></td>
+                      <td>{catProducts.length}</td>
+                      <td>
+                        <button className="btn-delete" onClick={() => handleDeleteCategory(cat)} style={{ padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><FaTrash /> Delete</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </div>
   );

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import defaultStore from '../data/store.json';
-import { FaStar, FaShoppingCart, FaSearch, FaFire, FaPhone, FaEnvelope, FaMapMarkerAlt, FaLink, FaHome, FaUserShield, FaCode, FaInfoCircle, FaFileContract, FaQuestionCircle, FaShoppingBag, FaStore } from 'react-icons/fa';
+import defaultProducts from '../data/products.json';
+import defaultSettings from '../data/settings.json';
+import { FaStar, FaShoppingCart, FaSearch, FaFire, FaPhone, FaEnvelope, FaMapMarkerAlt, FaLink, FaHome, FaUserShield, FaCode, FaInfoCircle, FaFileContract, FaQuestionCircle, FaShoppingBag, FaStore, FaList, FaThLarge } from 'react-icons/fa';
 import './CustomerPage.css';
 
 const getProducts = () => {
   const data = localStorage.getItem('crackers_db');
   if (!data) {
-    localStorage.setItem('crackers_db', JSON.stringify(defaultStore.products));
-    return [...defaultStore.products];
+    localStorage.setItem('crackers_db', JSON.stringify(defaultProducts));
+    return [...defaultProducts];
   }
   return JSON.parse(data);
 };
@@ -15,13 +16,13 @@ const getProducts = () => {
 const getSettings = () => {
   const data = localStorage.getItem('crackers_settings');
   if (!data) {
-    localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-    return { ...defaultStore.settings };
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   return JSON.parse(data);
 };
 
-const CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
+const DEFAULT_CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
 
 const ICON_MAP = {
   FaHome: <FaHome />,
@@ -45,14 +46,14 @@ function getIcon(iconName) {
 
 function renderProductImage(image, type) {
   if (image && (image.startsWith('http') || image.startsWith('data:image') || image.startsWith('/'))) {
-    const sizeStyle = type === 'featured' 
+    const sizeStyle = type === 'featured'
       ? { width: '80px', height: '80px', margin: '0 auto 12px', borderRadius: '8px', objectFit: 'cover', display: 'block' }
       : type === 'list'
-      ? { width: '60px', height: '60px', borderRadius: '6px', objectFit: 'cover', display: 'block' }
-      : { width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', display: 'block' };
+        ? { width: '60px', height: '60px', borderRadius: '6px', objectFit: 'cover', display: 'block' }
+        : { width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', display: 'block' };
     return <img src={image} alt="Product" style={sizeStyle} />;
   }
-  
+
   const emojiStyle = type === 'featured' ? { fontSize: '48px', display: 'block', marginBottom: '12px' } : {};
   return <span style={emojiStyle}>{image || '🎆'}</span>;
 }
@@ -64,6 +65,7 @@ function CustomerPage() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
+  const [viewMode, setViewMode] = useState('table');
 
   const loadData = () => {
     setProducts(getProducts());
@@ -77,8 +79,9 @@ function CustomerPage() {
   }, []);
 
   // Only show categories enabled by developer
-  const visibleCats = settings.visibleCategories || CATEGORIES;
-  const activeCats = CATEGORIES.filter((c) => visibleCats.includes(c));
+  const activeCategories = settings.categories || DEFAULT_CATEGORIES;
+  const visibleCats = settings.visibleCategories || activeCategories;
+  const activeCats = activeCategories.filter((c) => visibleCats.includes(c));
 
   // Filter products: must be in a visible category
   const filteredProducts = products.filter((p) => {
@@ -93,7 +96,13 @@ function CustomerPage() {
   const addToCart = (product) => {
     setCart((prev) => {
       const exists = prev.find((c) => c.id === product.id);
-      if (exists) return prev.map((c) => (c.id === product.id ? { ...c, qty: c.qty + 1 } : c));
+      if (exists) {
+        if (settings.enableStock !== false && exists.qty >= product.stock) {
+          alert('Cannot add more than available stock');
+          return prev;
+        }
+        return prev.map((c) => (c.id === product.id ? { ...c, qty: c.qty + 1 } : c));
+      }
       return [...prev, { ...product, qty: 1 }];
     });
   };
@@ -101,6 +110,38 @@ function CustomerPage() {
   const removeFromCart = (id) => setCart((prev) => prev.filter((c) => c.id !== id));
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
+
+  const handleCheckout = () => {
+    if (settings.minOrder && cartTotal < settings.minOrder) {
+      alert(`Minimum order is ₹${settings.minOrder}`);
+      return;
+    }
+    
+    const method = settings.bookingMethod || 'whatsapp';
+    const orderData = { id: Date.now(), items: cart, total: cartTotal, date: new Date().toISOString() };
+
+    if (method === 'whatsapp') {
+      let text = `*New Order* %0A`;
+      cart.forEach(item => { text += `${item.name} x ${item.qty} = ₹${item.price * item.qty} %0A`; });
+      text += `%0ATotal: ₹${cartTotal}`;
+      const phone = settings.contactPhone || '919999999999';
+      window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
+      setCart([]);
+      setShowCart(false);
+      alert('Order sent via WhatsApp!');
+    } else if (method === 'local') {
+      const orders = JSON.parse(localStorage.getItem('crackers_orders') || '[]');
+      orders.push(orderData);
+      localStorage.setItem('crackers_orders', JSON.stringify(orders));
+      setCart([]);
+      setShowCart(false);
+      alert('Order placed successfully (Saved locally)!');
+    } else if (method === 'db') {
+      fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderData) })
+        .then(() => { setCart([]); setShowCart(false); alert('Order placed successfully (Saved to DB)!'); })
+        .catch((e) => { console.error(e); alert('Failed to place order in DB. Continuing with local.'); });
+    }
+  };
 
   return (
     <div className="customer-page">
@@ -129,11 +170,17 @@ function CustomerPage() {
             <FaSearch className="search-icon" />
             <input type="text" placeholder="Search crackers..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div className="category-tabs">
-            <button className={`cat-tab ${selectedCategory === 'All' ? 'active' : ''}`} onClick={() => setSelectedCategory('All')}>All</button>
-            {activeCats.map((cat) => (
-              <button key={cat} className={`cat-tab ${selectedCategory === cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>{cat}</button>
-            ))}
+          {settings.enableCategories !== false && (
+            <div className="category-tabs">
+              <button className={`cat-tab ${selectedCategory === 'All' ? 'active' : ''}`} onClick={() => setSelectedCategory('All')}>All</button>
+              {activeCats.map((cat) => (
+                <button key={cat} className={`cat-tab ${selectedCategory === cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>{cat}</button>
+              ))}
+            </div>
+          )}
+          <div className="view-toggle">
+            <button className={`view-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><FaList /> Table</button>
+            <button className={`view-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')}><FaThLarge /> Card</button>
           </div>
         </div>
       </section>
@@ -149,10 +196,10 @@ function CustomerPage() {
                   {renderProductImage(product.image, 'featured')}
                 </div>
                 <h3>{product.name}</h3>
-                <p className="product-category">{product.category}</p>
+                {settings.enableCategories !== false && <p className="product-category">{product.category}</p>}
                 <div className="product-rating"><FaStar /> {product.rating}</div>
                 <div className="product-price">₹{product.price}</div>
-                <button className="btn-add-cart" onClick={() => addToCart(product)}><FaShoppingCart /> Add to Cart</button>
+                <button className="btn-add-cart" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}><FaShoppingCart /> Add to Cart</button>
               </div>
             ))}
           </div>
@@ -166,6 +213,44 @@ function CustomerPage() {
         </h2>
         {filteredProducts.length === 0 ? (
           <div className="empty-state"><span className="empty-icon">🔍</span><p>No products found</p></div>
+        ) : viewMode === 'table' ? (
+          <div className="products-table-wrap">
+            <table className="products-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Name</th>
+                  {settings.enableCategories !== false && <th>Category</th>}
+                  <th>Price</th>
+                  {settings.enableStock !== false && <th>Stock</th>}
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map((product) => (
+                  <tr key={product.id}>
+                    <td className="td-img">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '50px', height: '50px' }}>
+                        {renderProductImage(product.image, 'list')}
+                      </div>
+                    </td>
+                    <td className="td-name">
+                      <div style={{ fontWeight: '600', fontSize: '15px' }}>{product.name}</div>
+                      {product.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{product.description}</div>}
+                    </td>
+                    {settings.enableCategories !== false && <td><span className="product-category-tag">{product.category}</span></td>}
+                    <td className="td-price">₹{product.price}</td>
+                    {settings.enableStock !== false && <td><span className="product-stock">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span></td>}
+                    <td>
+                      <button className="btn-add-cart-sm" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}>
+                        <FaShoppingCart /> Add
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="products-grid">
             {filteredProducts.map((product) => (
@@ -177,14 +262,16 @@ function CustomerPage() {
                   <h3 className="product-name">{product.name}</h3>
                   <p className="product-desc">{product.description}</p>
                   <div className="product-meta">
-                    <span className="product-category-tag">{product.category}</span>
+                    {settings.enableCategories !== false && <span className="product-category-tag">{product.category}</span>}
                     <span className="product-rating-sm"><FaStar /> {product.rating}</span>
                   </div>
                   <div className="product-bottom">
                     <span className="product-price-lg">₹{product.price}</span>
-                    <span className="product-stock">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span>
+                    {settings.enableStock !== false && (
+                      <span className="product-stock">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span>
+                    )}
                   </div>
-                  <button className="btn-add-cart-sm" onClick={() => addToCart(product)} disabled={product.stock === 0}>
+                  <button className="btn-add-cart-sm" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}>
                     <FaShoppingCart /> Add to Cart
                   </button>
                 </div>
@@ -223,7 +310,7 @@ function CustomerPage() {
                 <div className="cart-footer">
                   {settings.minOrder && cartTotal < settings.minOrder && <p className="cart-min-warning">⚠️ Min order: ₹{settings.minOrder}</p>}
                   <div className="cart-total"><span>Total</span><span className="cart-total-amount">₹{cartTotal}</span></div>
-                  <button className="btn-checkout">Checkout</button>
+                  <button className="btn-checkout" onClick={handleCheckout}>Checkout</button>
                 </div>
               </>
             )}
@@ -235,12 +322,16 @@ function CustomerPage() {
         <div className="footer-inner">
           {settings.showFooterBrand !== false && (
             <div className="footer-brand">
-              <span className="footer-logo">🎆</span>
+              {settings.logo ? (
+                <img src={settings.logo} alt="Footer Logo" style={{ maxHeight: '50px', marginBottom: '12px', objectFit: 'contain', display: 'block' }} />
+              ) : (
+                <span className="footer-logo">🎆</span>
+              )}
               <h3>{settings.siteName}</h3>
               <p>{settings.tagline}</p>
             </div>
           )}
-          
+
           {settings.showFooterContact !== false && (
             <div className="footer-contact">
               <h4>Contact Us</h4>
@@ -249,7 +340,7 @@ function CustomerPage() {
               {settings.address && <p><FaMapMarkerAlt /> {settings.address}</p>}
             </div>
           )}
-          
+
           {settings.showFooterCategories !== false && (
             <div className="footer-categories">
               <h4>Categories</h4>

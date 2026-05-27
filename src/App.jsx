@@ -5,21 +5,21 @@ import AdminPage from './pages/AdminPage';
 import DeveloperPage from './pages/DeveloperPage';
 import AuthPage from './pages/AuthPage';
 import Navbar from './components/Navbar';
-import defaultStore from './data/store.json';
+import defaultSettings from './data/settings.json';
 import './App.css';
 
 const getSettings = () => {
   const data = localStorage.getItem('crackers_settings');
   if (!data) {
-    localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-    return { ...defaultStore.settings };
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   const settings = JSON.parse(data);
   // Auto-migrate: filter out default role routing options to keep navbar clean
   if (settings.navbarLinks && settings.navbarLinks.some(l => ['/', '/admin', '/developer'].includes(l.path))) {
     settings.navbarLinks = settings.navbarLinks.filter(l => !['/', '/admin', '/developer'].includes(l.path));
     if (settings.navbarLinks.length === 0) {
-      settings.navbarLinks = [...defaultStore.settings.navbarLinks];
+      settings.navbarLinks = [...defaultSettings.navbarLinks];
     }
     localStorage.setItem('crackers_settings', JSON.stringify(settings));
   }

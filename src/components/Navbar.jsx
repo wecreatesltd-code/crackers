@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { FaHome, FaUserShield, FaCode, FaInfoCircle, FaFileContract, FaLink, FaQuestionCircle, FaShoppingBag, FaStore, FaEnvelope, FaPhone, FaSignOutAlt, FaUser, FaBars, FaTimes } from 'react-icons/fa';
-import defaultStore from '../data/store.json';
+import defaultSettings from '../data/settings.json';
 import './Navbar.css';
 
 const getSettings = () => {
   const data = localStorage.getItem('crackers_settings');
   if (!data) {
-    localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-    return { ...defaultStore.settings };
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   const settings = JSON.parse(data);
   // Auto-migrate: filter out default role routing options to keep navbar clean
   if (settings.navbarLinks && settings.navbarLinks.some(l => ['/', '/admin', '/developer'].includes(l.path))) {
     settings.navbarLinks = settings.navbarLinks.filter(l => !['/', '/admin', '/developer'].includes(l.path));
     if (settings.navbarLinks.length === 0) {
-      settings.navbarLinks = [...defaultStore.settings.navbarLinks];
+      settings.navbarLinks = [...defaultSettings.navbarLinks];
     }
     localStorage.setItem('crackers_settings', JSON.stringify(settings));
   }
@@ -90,7 +90,11 @@ function Navbar() {
     <nav className="navbar" style={{ '--navbar-height': `${navHeight}px` }}>
       <div className="navbar-inner">
         <div className="navbar-brand">
-          <span className="brand-icon">🎆</span>
+          {settings.logo ? (
+            <img src={settings.logo} alt="Brand Logo" className="brand-logo-img" style={{ maxHeight: '40px', objectFit: 'contain', marginRight: '8px' }} />
+          ) : (
+            <span className="brand-icon">🎆</span>
+          )}
           <span className="brand-text">{settings.siteName || 'Sri Murugan Crackers'}</span>
         </div>
 
