@@ -1,22 +1,25 @@
 import { useState, useEffect } from 'react';
-import defaultStore from '../data/store.json';
-import { FaCode, FaPlus, FaTrash, FaEdit, FaSave, FaCog, FaDatabase, FaSync, FaChartBar, FaTimes, FaPaintBrush, FaStore, FaFont, FaLayerGroup, FaLink, FaUser } from 'react-icons/fa';
+import defaultProducts from '../data/products.json';
+import defaultSettings from '../data/settings.json';
+import defaultUsers from '../data/users.json';
+import { FaCode, FaPlus, FaTrash, FaEdit, FaSave, FaCog, FaDatabase, FaSync, FaChartBar, FaTimes, FaPaintBrush, FaStore, FaFont, FaLayerGroup, FaLink, FaUser, FaServer } from 'react-icons/fa';
+import AddProductForm from '../components/AddProductForm';
 import './DeveloperPage.css';
 
 const getProducts = () => {
   const data = localStorage.getItem('crackers_db');
   if (!data) {
-    localStorage.setItem('crackers_db', JSON.stringify(defaultStore.products));
-    return [...defaultStore.products];
+    localStorage.setItem('crackers_db', JSON.stringify(defaultProducts));
+    return [...defaultProducts];
   }
   return JSON.parse(data);
 };
 
 const syncWithServer = async (updatedFields = {}) => {
   try {
-    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultStore.products;
-    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultStore.settings;
-    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultStore.users;
+    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultProducts;
+    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultSettings;
+    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultUsers;
     
     await fetch('/api/store', {
       method: 'POST',
@@ -56,15 +59,15 @@ const updateProduct = (id, updates) => {
 const getSettings = () => {
   const data = localStorage.getItem('crackers_settings');
   if (!data) {
-    localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-    return { ...defaultStore.settings };
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   const settings = JSON.parse(data);
   // Auto-migrate: filter out default role routing options to keep navbar clean
   if (settings.navbarLinks && settings.navbarLinks.some(l => ['/', '/admin', '/developer'].includes(l.path))) {
     settings.navbarLinks = settings.navbarLinks.filter(l => !['/', '/admin', '/developer'].includes(l.path));
     if (settings.navbarLinks.length === 0) {
-      settings.navbarLinks = [...defaultStore.settings.navbarLinks];
+      settings.navbarLinks = [...defaultSettings.navbarLinks];
     }
     localStorage.setItem('crackers_settings', JSON.stringify(settings));
   }
@@ -80,8 +83,8 @@ const saveSettings = (settings) => {
 const getUsers = () => {
   const data = localStorage.getItem('crackers_users');
   if (!data) {
-    localStorage.setItem('crackers_users', JSON.stringify(defaultStore.users));
-    return [...defaultStore.users];
+    localStorage.setItem('crackers_users', JSON.stringify(defaultUsers));
+    return [...defaultUsers];
   }
   return JSON.parse(data);
 };
@@ -93,15 +96,15 @@ const saveUsers = (users) => {
 };
 
 const resetAll = () => {
-  localStorage.setItem('crackers_db', JSON.stringify(defaultStore.products));
-  localStorage.setItem('crackers_settings', JSON.stringify(defaultStore.settings));
-  localStorage.setItem('crackers_users', JSON.stringify(defaultStore.users));
+  localStorage.setItem('crackers_db', JSON.stringify(defaultProducts));
+  localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+  localStorage.setItem('crackers_users', JSON.stringify(defaultUsers));
   localStorage.removeItem('crackers_current_user');
   window.dispatchEvent(new Event('store-updated'));
-  syncWithServer({ products: defaultStore.products, settings: defaultStore.settings, users: defaultStore.users });
+  syncWithServer({ products: defaultProducts, settings: defaultSettings, users: defaultUsers });
 };
 
-const CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
+const DEFAULT_CATEGORIES = ['Sparklers', 'Ground', 'Aerial', 'Loud', 'Fountain', 'Novelty'];
 
 function renderProductImage(image) {
   if (image && (image.startsWith('http') || image.startsWith('data:image') || image.startsWith('/'))) {
@@ -116,9 +119,11 @@ function DeveloperPage() {
   const [activeTab, setActiveTab] = useState('products');
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [addForm, setAddForm] = useState({ name: '', category: 'Sparklers', price: '', stock: '', image: '🎆', description: '', rating: 4.0, featured: false });
   const [toast, setToast] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+
+  const activeCategories = settings.categories || DEFAULT_CATEGORIES;
 
   // User accounts states
   const [users, setUsers] = useState([]);
@@ -158,11 +163,8 @@ function DeveloperPage() {
     }
   };
 
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!addForm.name || !addForm.price) return showToast('Fill name & price!', 'error');
-    addProduct({ ...addForm, price: Number(addForm.price), stock: Number(addForm.stock), rating: Number(addForm.rating) });
-    setAddForm({ name: '', category: 'Sparklers', price: '', stock: '', image: '🎆', description: '', rating: 4.0, featured: false });
+  const handleAdd = (product) => {
+    addProduct(product);
     setShowAddModal(false);
     showToast('Product added! Visible on Customer & Admin pages ✅');
   };
@@ -222,9 +224,41 @@ function DeveloperPage() {
     showToast(`User "${userAddForm.username}" added successfully! ✅`);
   };
 
-  // Category toggle
+  // Category management
+  const handleAddCategory = (e) => {
+    e.preventDefault();
+    if (!newCategory.trim()) return;
+    const cat = newCategory.trim();
+    if (activeCategories.includes(cat)) return showToast('Category already exists!', 'error');
+    const updated = [...activeCategories, cat];
+    
+    const ns = { ...settings, categories: updated };
+    const currentVisible = settings.visibleCategories || activeCategories;
+    if (!currentVisible.includes(cat)) {
+      ns.visibleCategories = [...currentVisible, cat];
+    }
+    
+    setSettings(ns);
+    saveSettings(ns);
+    
+    setNewCategory('');
+    showToast(`Category "${cat}" added successfully! ✅`);
+  };
+
+  const handleDeleteCategory = (cat) => {
+    if (window.confirm(`Are you sure you want to delete the category "${cat}"? Products in this category will still exist but may not be filterable.`)) {
+      const updated = activeCategories.filter(c => c !== cat);
+      const currentVisible = settings.visibleCategories || activeCategories;
+      
+      const ns = { ...settings, categories: updated, visibleCategories: currentVisible.filter(c => c !== cat) };
+      setSettings(ns);
+      saveSettings(ns);
+      showToast(`Category "${cat}" deleted! 🗑️`);
+    }
+  };
+
   const toggleCategory = (cat) => {
-    const current = settings.visibleCategories || [...CATEGORIES];
+    const current = settings.visibleCategories || activeCategories;
     const updated = current.includes(cat) ? current.filter((c) => c !== cat) : [...current, cat];
     const newSettings = { ...settings, visibleCategories: updated };
     setSettings(newSettings);
@@ -303,6 +337,7 @@ function DeveloperPage() {
         {[
           { id: 'products', icon: <FaDatabase />, label: 'Products (CRUD)' },
           { id: 'settings', icon: <FaCog />, label: 'Site Settings' },
+          { id: 'main_settings', icon: <FaServer />, label: 'Main Settings' },
           { id: 'theme', icon: <FaPaintBrush />, label: 'Theme & Display' },
           { id: 'navigation', icon: <FaLink />, label: 'Navbar & Footer' },
           { id: 'categories', icon: <FaLayerGroup />, label: 'Categories' },
@@ -318,7 +353,7 @@ function DeveloperPage() {
           <div className="dev-table-wrap">
             <table className="dev-table">
               <thead>
-                <tr><th>ID</th><th>Icon</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Rating</th><th>Featured</th><th>Actions</th></tr>
+                <tr><th>ID</th><th>Icon</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th>{settings.enableReview !== false && <th>Rating</th>}<th>Featured</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {products.map((p) => (
@@ -332,10 +367,10 @@ function DeveloperPage() {
                       )}
                     </td>
                     <td>{editingId === p.id ? <input className="edit-input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /> : <span className="td-name">{p.name}</span>}</td>
-                    <td>{editingId === p.id ? <select className="edit-input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select> : <span className="td-cat">{p.category}</span>}</td>
+                    <td>{editingId === p.id ? <select className="edit-input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>{activeCategories.map((c) => <option key={c}>{c}</option>)}</select> : <span className="td-cat">{p.category}</span>}</td>
                     <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} /> : <span className="td-price">₹{p.price}</span>}</td>
                     <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} /> : p.stock}</td>
-                    <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" step="0.1" min="0" max="5" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /> : <span className="td-rating">⭐ {p.rating}</span>}</td>
+                    {settings.enableReview !== false && <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" step="0.1" min="0" max="5" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /> : <span className="td-rating">⭐ {p.rating}</span>}</td>}
                     <td>{editingId === p.id ? <input type="checkbox" checked={editForm.featured} onChange={(e) => setEditForm({ ...editForm, featured: e.target.checked })} /> : (p.featured ? '✅' : '—')}</td>
                     <td className="td-actions">
                       {editingId === p.id ? (
@@ -359,8 +394,41 @@ function DeveloperPage() {
             <h3>🏪 Site Configuration</h3>
             <p className="settings-note">Changes here reflect on Customer & Admin pages instantly</p>
 
-            {/* Store Name - Prominent */}
-            <div className="store-name-section">
+            {/* Main Settings - Prominent */}
+            <div className="main-settings-section">
+              <h4 className="main-settings-header"><FaCog /> Main Settings</h4>
+              
+              <div className="logo-upload-wrap">
+                <div className="logo-preview">
+                  {settings.logo ? (
+                    <img src={settings.logo} alt="Store Logo" />
+                  ) : (
+                    <div className="logo-preview-placeholder"><FaStore /></div>
+                  )}
+                </div>
+                <div className="logo-upload-btn-wrap">
+                  <label className="btn-upload">
+                    <FaPlus /> Upload Logo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="logo-file-input"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setSettings({ ...settings, logo: reader.result });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  <p className="settings-note" style={{ marginBottom: 0, fontSize: '12px' }}>Recommended: Square or wide image. Max 1MB.</p>
+                </div>
+              </div>
+
               <div className="store-name-preview">
                 <FaStore className="store-icon" />
                 <div>
@@ -406,6 +474,85 @@ function DeveloperPage() {
       )}
 
 
+
+      {/* Main Settings Tab */}
+      {activeTab === 'main_settings' && (
+        <div className="dev-content">
+          <div className="settings-form">
+            <h3><FaServer /> Main Settings</h3>
+            <p className="settings-note">Core application configurations and storage options.</p>
+            
+            <div className="settings-grid">
+              {/* Category Switch */}
+              <div className="setting-item setting-toggle">
+                <label>Enable Categories Feature</label>
+                <button 
+                  className={`toggle-btn ${settings.enableCategories !== false ? 'on' : 'off'}`} 
+                  onClick={() => updateSettingLive('enableCategories', settings.enableCategories !== false ? false : true)}
+                >
+                  {settings.enableCategories !== false ? 'ON' : 'OFF'}
+                </button>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Toggle the categories feature globally across the application.</p>
+              </div>
+
+              {/* Storage Option */}
+              <div className="setting-item">
+                <label>Storage Option</label>
+                <select 
+                  className="edit-input" 
+                  value={settings.storageMethod || 'json'} 
+                  onChange={(e) => updateSettingLive('storageMethod', e.target.value)}
+                  style={{ height: '42px', padding: '0 14px' }}
+                >
+                  <option value="json">JSON (Local Storage)</option>
+                  <option value="firebase">Firebase Database</option>
+                </select>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Select where data is saved (requires refresh).</p>
+              </div>
+
+              {/* Stock Switch */}
+              <div className="setting-item setting-toggle">
+                <label>Enable Stock Management</label>
+                <button 
+                  className={`toggle-btn ${settings.enableStock !== false ? 'on' : 'off'}`} 
+                  onClick={() => updateSettingLive('enableStock', settings.enableStock !== false ? false : true)}
+                >
+                  {settings.enableStock !== false ? 'ON' : 'OFF'}
+                </button>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Toggle stock limit and inventory tracking.</p>
+              </div>
+
+              {/* Review Switch */}
+              <div className="setting-item setting-toggle">
+                <label>Enable Reviews & Ratings</label>
+                <button 
+                  className={`toggle-btn ${settings.enableReview !== false ? 'on' : 'off'}`} 
+                  onClick={() => updateSettingLive('enableReview', settings.enableReview !== false ? false : true)}
+                >
+                  {settings.enableReview !== false ? 'ON' : 'OFF'}
+                </button>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Toggle product reviews globally across the application.</p>
+              </div>
+
+              {/* Method of Booking */}
+              <div className="setting-item">
+                <label>Method of Booking</label>
+                <select 
+                  className="edit-input" 
+                  value={settings.bookingMethod || 'whatsapp'} 
+                  onChange={(e) => updateSettingLive('bookingMethod', e.target.value)}
+                  style={{ height: '42px', padding: '0 14px' }}
+                >
+                  <option value="whatsapp">Order share via WhatsApp</option>
+                  <option value="local">Order store in Local Storage</option>
+                  <option value="db">Order store in DB</option>
+                </select>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Select how customer orders are processed.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Theme & Display Tab */}
       {activeTab === 'theme' && (
@@ -565,8 +712,8 @@ function DeveloperPage() {
             <h3><FaLayerGroup /> Category Visibility</h3>
             <p className="settings-note">Check/uncheck to show or hide categories on Customer & Admin pages</p>
             <div className="categories-grid">
-              {CATEGORIES.map((cat) => {
-                const isVisible = (settings.visibleCategories || CATEGORIES).includes(cat);
+              {activeCategories.map((cat) => {
+                const isVisible = (settings.visibleCategories || activeCategories).includes(cat);
                 const catProducts = products.filter((p) => p.category === cat);
                 return (
                   <div key={cat} className={`category-toggle-card ${isVisible ? 'visible' : 'hidden'}`}>
@@ -581,20 +728,31 @@ function DeveloperPage() {
                         <span className="category-toggle-name">{cat}</span>
                         <span className="category-toggle-count">{catProducts.length} products</span>
                       </div>
-                      <span className={`category-status ${isVisible ? 'status-on' : 'status-off'}`}>
-                        {isVisible ? 'Visible' : 'Hidden'}
-                      </span>
-                    </label>
-                  </div>
+                        <span className={`category-status ${isVisible ? 'status-on' : 'status-off'}`}>
+                          {isVisible ? 'Visible' : 'Hidden'}
+                        </span>
+                      </label>
+                      <button className="btn-dev" onClick={() => handleDeleteCategory(cat)} style={{ position: 'absolute', top: '8px', right: '8px', background: 'transparent', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }}>
+                        <FaTrash />
+                      </button>
+                    </div>
                 );
               })}
             </div>
             <div className="categories-summary">
-              <p>✅ <strong>{(settings.visibleCategories || CATEGORIES).length}</strong> of {CATEGORIES.length} categories visible</p>
+              <p>✅ <strong>{(settings.visibleCategories || activeCategories).length}</strong> of {activeCategories.length} categories visible</p>
               <div className="categories-actions">
-                <button className="btn-dev btn-show-all" onClick={() => { const ns = { ...settings, visibleCategories: [...CATEGORIES] }; setSettings(ns); saveSettings(ns); showToast('All categories enabled ✅'); }}>Show All</button>
+                <button className="btn-dev btn-show-all" onClick={() => { const ns = { ...settings, visibleCategories: [...activeCategories] }; setSettings(ns); saveSettings(ns); showToast('All categories enabled ✅'); }}>Show All</button>
                 <button className="btn-dev btn-hide-all" onClick={() => { const ns = { ...settings, visibleCategories: [] }; setSettings(ns); saveSettings(ns); showToast('All categories hidden 🚫'); }}>Hide All</button>
               </div>
+            </div>
+            
+            <div style={{ marginTop: '24px', padding: '16px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '15px' }}>✨ Add New Category</h4>
+              <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '12px' }}>
+                <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Gift Boxes" style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none' }} />
+                <button type="submit" className="btn-dev btn-add-new" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FaPlus /> Add Category</button>
+              </form>
             </div>
           </div>
         </div>
@@ -957,27 +1115,14 @@ function DeveloperPage() {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header"><h3><FaPlus /> Add New Product</h3><button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button></div>
-            <form className="modal-form" onSubmit={handleAdd}>
-              <div className="form-group">
-                <label>Icon or Custom Image URL</label>
-                <div className="emoji-picker" style={{ marginBottom: '8px' }}>
-                  {emojis.map((e) => <button type="button" key={e} className={`emoji-btn ${addForm.image === e ? 'active' : ''}`} onClick={() => setAddForm({ ...addForm, image: e })}>{e}</button>)}
-                </div>
-                <input type="text" value={emojis.includes(addForm.image) ? '' : addForm.image} onChange={(e) => setAddForm({ ...addForm, image: e.target.value })} placeholder="Or paste Custom Image URL here..." style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }} />
-              </div>
-              <div className="form-row">
-                <div className="form-group"><label>Name *</label><input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="Product name" /></div>
-                <div className="form-group"><label>Category</label><select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
-              </div>
-              <div className="form-row">
-                <div className="form-group"><label>Price *</label><input type="number" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: e.target.value })} placeholder="₹" /></div>
-                <div className="form-group"><label>Stock</label><input type="number" value={addForm.stock} onChange={(e) => setAddForm({ ...addForm, stock: e.target.value })} placeholder="100" /></div>
-                <div className="form-group"><label>Rating</label><input type="number" step="0.1" min="0" max="5" value={addForm.rating} onChange={(e) => setAddForm({ ...addForm, rating: e.target.value })} /></div>
-              </div>
-              <div className="form-group"><label>Description</label><textarea value={addForm.description} onChange={(e) => setAddForm({ ...addForm, description: e.target.value })} rows={2} placeholder="Description..." /></div>
-              <div className="form-group form-check"><label><input type="checkbox" checked={addForm.featured} onChange={(e) => setAddForm({ ...addForm, featured: e.target.checked })} /> Featured</label></div>
-              <button type="submit" className="btn-dev btn-add-new" style={{ width: '100%', justifyContent: 'center' }}><FaPlus /> Add Product</button>
-            </form>
+            <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
+              <AddProductForm 
+                categories={activeCategories} 
+                settings={settings} 
+                onAdd={handleAdd} 
+                onCancel={() => setShowAddModal(false)}
+              />
+            </div>
           </div>
         </div>
       )}

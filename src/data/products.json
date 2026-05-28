@@ -1,0 +1,46 @@
+[
+  {
+    "name": "10cm Stick ",
+    "category": "Sparklers",
+    "price": 20,
+    "stock": 0,
+    "image": "https://akm-img-a-in.tosshub.com/indiatoday/images/story/202210/diwali-three_four.jpeg?VersionId=m.Vz5HaSDguLqvdgZXXYcgT5dZcLs2Xp",
+    "description": "",
+    "rating": 4,
+    "featured": false,
+    "id": 1
+  },
+  {
+    "name": "100 Shot",
+    "category": "Aerial",
+    "price": 700,
+    "stock": 0,
+    "image": "https://png.pngtree.com/png-vector/20250606/ourmid/pngtree-colorful-fireworks-png-image_16479971.png",
+    "description": "",
+    "rating": 5,
+    "featured": false,
+    "id": 2
+  },
+  {
+    "name": "Rocket",
+    "category": "Aerial",
+    "price": 100,
+    "stock": 0,
+    "image": "https://img.freepik.com/free-vector/shiny-diwali-crackers-firework-celebration-illustration_1017-21580.jpg?semt=ais_hybrid&w=740&q=80",
+    "description": "",
+    "rating": 4,
+    "featured": false,
+    "id": 3
+  },
+  {
+    "name": "Out",
+    "category": "Ground",
+    "price": 250,
+    "stock": 0,
+    "image": "https://www.america-times.com/wp-content/uploads/2018/10/Firecrackers-China-Made-1068x1214.jpg",
+    "description": "",
+    "rating": 4,
+    "featured": false,
+    "id": 4
+  }
+]

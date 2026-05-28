@@ -1,23 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import defaultStore from '../data/store.json';
+import defaultProducts from '../data/products.json';
+import defaultSettings from '../data/settings.json';
+import defaultUsers from '../data/users.json';
 import { FaUser, FaLock, FaUserTag, FaFire, FaCode, FaUserShield } from 'react-icons/fa';
 import './AuthPage.css';
 
 const getUsers = () => {
   const data = localStorage.getItem('crackers_users');
   if (!data) {
-    localStorage.setItem('crackers_users', JSON.stringify(defaultStore.users));
-    return [...defaultStore.users];
+    localStorage.setItem('crackers_users', JSON.stringify(defaultUsers));
+    return [...defaultUsers];
+  }
+  return JSON.parse(data);
+};
+
+const getSettings = () => {
+  const data = localStorage.getItem('crackers_settings');
+  if (!data) {
+    localStorage.setItem('crackers_settings', JSON.stringify(defaultSettings));
+    return { ...defaultSettings };
   }
   return JSON.parse(data);
 };
 
 const syncWithServer = async (updatedFields = {}) => {
   try {
-    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultStore.products;
-    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultStore.settings;
-    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultStore.users;
+    const products = updatedFields.products || JSON.parse(localStorage.getItem('crackers_db')) || defaultProducts;
+    const settings = updatedFields.settings || JSON.parse(localStorage.getItem('crackers_settings')) || defaultSettings;
+    const users = updatedFields.users || JSON.parse(localStorage.getItem('crackers_users')) || defaultUsers;
     
     await fetch('/api/store', {
       method: 'POST',
@@ -60,7 +71,12 @@ function AuthPage() {
   const [role, setRole] = useState('customer');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [settings, setSettings] = useState({});
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setSettings(getSettings());
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -114,8 +130,12 @@ function AuthPage() {
 
       <div className="auth-card">
         <div className="auth-header">
-          <span className="auth-logo">🎆</span>
-          <h2>Welcome to Radha Pyropark</h2>
+          {settings.logo ? (
+            <img src={settings.logo} alt="Logo" className="auth-logo-img" style={{ maxHeight: '60px', objectFit: 'contain', display: 'block', margin: '0 auto 16px' }} />
+          ) : (
+            <span className="auth-logo">🎆</span>
+          )}
+          <h2>Welcome to {settings.siteName || 'Sri Murugan Crackers'}</h2>
           <p>{isLogin ? 'Sign in to access your dashboard' : 'Create an account to order premium crackers'}</p>
         </div>
 
@@ -149,16 +169,6 @@ function AuthPage() {
             </div>
           </div>
 
-          {!isLogin && (
-            <div className="auth-group">
-              <label><FaUserTag /> Account Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className="auth-select">
-                <option value="customer">Customer 🛒</option>
-                <option value="admin">Administrator 🛡️</option>
-                <option value="developer">Developer ⚙️</option>
-              </select>
-            </div>
-          )}
 
           <button type="submit" className="auth-submit-btn">
             {isLogin ? 'Sign In' : 'Create Account'}
