@@ -199,7 +199,7 @@ function AdminPage() {
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
-                <tr><th>Icon / Image</th><th>Name</th>{settings.enableCategories !== false && <th>Category</th>}<th>Price</th>{settings.enableStock !== false && <th>Stock</th>}<th>Rating</th><th>Featured</th><th>Action</th></tr>
+                <tr><th>Icon / Image</th><th>Name</th>{settings.enableCategories !== false && <th>Category</th>}<th>Price</th>{settings.enableStock !== false && <th>Stock</th>}{settings.enableReview !== false && <th>Rating</th>}<th>Featured</th><th>Action</th></tr>
               </thead>
               <tbody>
                 {visibleProducts.map((p) => (
@@ -211,7 +211,7 @@ function AdminPage() {
                     {settings.enableCategories !== false && <td><span className="td-category">{p.category}</span></td>}
                     <td className="td-price">₹{p.price}</td>
                     {settings.enableStock !== false && <td>{p.stock}</td>}
-                    <td className="td-rating">⭐ {p.rating}</td>
+                    {settings.enableReview !== false && <td className="td-rating">⭐ {p.rating}</td>}
                     <td>{p.featured ? '✅' : '—'}</td>
                     <td>
                       <button className="btn-delete" onClick={() => handleDelete(p.id, p.name)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>

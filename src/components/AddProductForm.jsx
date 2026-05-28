@@ -72,7 +72,9 @@ function AddProductForm({ categories, settings, onAdd, onCancel }) {
         {settings?.enableStock !== false && (
           <div className="form-group" style={{ flex: 1 }}><label>Stock</label><input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="100" /></div>
         )}
-        <div className="form-group" style={{ flex: 1 }}><label>Rating</label><input type="number" step="0.1" min="0" max="5" value={form.rating} onChange={(e) => setForm({ ...form, rating: e.target.value })} /></div>
+        {settings?.enableReview !== false && (
+          <div className="form-group" style={{ flex: 1 }}><label>Rating</label><input type="number" step="0.1" min="0" max="5" value={form.rating} onChange={(e) => setForm({ ...form, rating: e.target.value })} /></div>
+        )}
       </div>
       
       <div className="form-group"><label>Description</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the product..." rows={3} /></div>

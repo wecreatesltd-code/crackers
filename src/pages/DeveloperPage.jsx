@@ -353,7 +353,7 @@ function DeveloperPage() {
           <div className="dev-table-wrap">
             <table className="dev-table">
               <thead>
-                <tr><th>ID</th><th>Icon</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Rating</th><th>Featured</th><th>Actions</th></tr>
+                <tr><th>ID</th><th>Icon</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th>{settings.enableReview !== false && <th>Rating</th>}<th>Featured</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {products.map((p) => (
@@ -370,7 +370,7 @@ function DeveloperPage() {
                     <td>{editingId === p.id ? <select className="edit-input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>{activeCategories.map((c) => <option key={c}>{c}</option>)}</select> : <span className="td-cat">{p.category}</span>}</td>
                     <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} /> : <span className="td-price">₹{p.price}</span>}</td>
                     <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} /> : p.stock}</td>
-                    <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" step="0.1" min="0" max="5" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /> : <span className="td-rating">⭐ {p.rating}</span>}</td>
+                    {settings.enableReview !== false && <td>{editingId === p.id ? <input className="edit-input edit-sm" type="number" step="0.1" min="0" max="5" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /> : <span className="td-rating">⭐ {p.rating}</span>}</td>}
                     <td>{editingId === p.id ? <input type="checkbox" checked={editForm.featured} onChange={(e) => setEditForm({ ...editForm, featured: e.target.checked })} /> : (p.featured ? '✅' : '—')}</td>
                     <td className="td-actions">
                       {editingId === p.id ? (
@@ -520,6 +520,18 @@ function DeveloperPage() {
                   {settings.enableStock !== false ? 'ON' : 'OFF'}
                 </button>
                 <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Toggle stock limit and inventory tracking.</p>
+              </div>
+
+              {/* Review Switch */}
+              <div className="setting-item setting-toggle">
+                <label>Enable Reviews & Ratings</label>
+                <button 
+                  className={`toggle-btn ${settings.enableReview !== false ? 'on' : 'off'}`} 
+                  onClick={() => updateSettingLive('enableReview', settings.enableReview !== false ? false : true)}
+                >
+                  {settings.enableReview !== false ? 'ON' : 'OFF'}
+                </button>
+                <p className="settings-note" style={{marginTop: '8px', fontSize: '12px'}}>Toggle product reviews globally across the application.</p>
               </div>
 
               {/* Method of Booking */}

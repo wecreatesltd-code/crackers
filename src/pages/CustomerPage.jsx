@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import defaultProducts from '../data/products.json';
 import defaultSettings from '../data/settings.json';
-import { FaStar, FaShoppingCart, FaSearch, FaFire, FaPhone, FaEnvelope, FaMapMarkerAlt, FaLink, FaHome, FaUserShield, FaCode, FaInfoCircle, FaFileContract, FaQuestionCircle, FaShoppingBag, FaStore, FaList, FaThLarge } from 'react-icons/fa';
+import { FaStar, FaShoppingCart, FaSearch, FaFire, FaPhone, FaEnvelope, FaMapMarkerAlt, FaLink, FaHome, FaUserShield, FaCode, FaInfoCircle, FaFileContract, FaQuestionCircle, FaShoppingBag, FaStore, FaList, FaThLarge, FaFilter, FaSortAmountDown } from 'react-icons/fa';
 import './CustomerPage.css';
 
 const getProducts = () => {
@@ -66,6 +66,9 @@ function CustomerPage() {
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const [viewMode, setViewMode] = useState('table');
+  const [priceRange, setPriceRange] = useState('all');
+  const [sortBy, setSortBy] = useState('default');
+  const [showFilters, setShowFilters] = useState(false);
 
   const loadData = () => {
     setProducts(getProducts());
@@ -83,12 +86,34 @@ function CustomerPage() {
   const visibleCats = settings.visibleCategories || activeCategories;
   const activeCats = activeCategories.filter((c) => visibleCats.includes(c));
 
+  // Price range boundaries
+  const priceRanges = [
+    { value: 'all', label: 'All Prices' },
+    { value: '0-50', label: 'Under ₹50', min: 0, max: 50 },
+    { value: '50-100', label: '₹50 - ₹100', min: 50, max: 100 },
+    { value: '100-250', label: '₹100 - ₹250', min: 100, max: 250 },
+    { value: '250-500', label: '₹250 - ₹500', min: 250, max: 500 },
+    { value: '500-1000', label: '₹500 - ₹1000', min: 500, max: 1000 },
+    { value: '1000+', label: 'Above ₹1000', min: 1000, max: Infinity },
+  ];
+
   // Filter products: must be in a visible category
   const filteredProducts = products.filter((p) => {
     const inVisible = visibleCats.includes(p.category);
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchCategory = selectedCategory === 'All' || p.category === selectedCategory;
-    return inVisible && matchSearch && matchCategory;
+    let matchPrice = true;
+    if (priceRange !== 'all') {
+      const range = priceRanges.find(r => r.value === priceRange);
+      if (range) matchPrice = p.price >= range.min && p.price < range.max;
+    }
+    return inVisible && matchSearch && matchCategory && matchPrice;
+  }).sort((a, b) => {
+    if (sortBy === 'price-low') return a.price - b.price;
+    if (sortBy === 'price-high') return b.price - a.price;
+    if (sortBy === 'name-az') return a.name.localeCompare(b.name);
+    if (sortBy === 'name-za') return b.name.localeCompare(a.name);
+    return 0;
   });
 
   const featuredProducts = products.filter((p) => p.featured && visibleCats.includes(p.category));
@@ -116,7 +141,7 @@ function CustomerPage() {
       alert(`Minimum order is ₹${settings.minOrder}`);
       return;
     }
-    
+
     const method = settings.bookingMethod || 'whatsapp';
     const orderData = { id: Date.now(), items: cart, total: cartTotal, date: new Date().toISOString() };
 
@@ -141,6 +166,38 @@ function CustomerPage() {
         .then(() => { setCart([]); setShowCart(false); alert('Order placed successfully (Saved to DB)!'); })
         .catch((e) => { console.error(e); alert('Failed to place order in DB. Continuing with local.'); });
     }
+  };
+
+  const renderQuantityControl = (product, showTotal = true) => {
+    const cartItem = cart.find(c => c.id === product.id);
+    const qty = cartItem ? cartItem.qty : 0;
+    const total = qty * product.price;
+
+    return (
+      <div className="qty-control-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', minWidth: '110px' }}>
+        <div className="qty-selector" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', padding: '4px 8px' }}>
+          <button
+            onClick={() => {
+              if (qty === 1) removeFromCart(product.id);
+              else if (qty > 1) setCart(prev => prev.map(c => c.id === product.id ? { ...c, qty: c.qty - 1 } : c));
+            }}
+            disabled={qty === 0}
+            style={{ background: 'transparent', border: 'none', color: qty === 0 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: qty === 0 ? 'not-allowed' : 'pointer', padding: '4px 12px', fontSize: '18px', fontWeight: 'bold' }}
+          >-</button>
+          <span style={{ fontWeight: '700', fontSize: '15px' }}>{qty}</span>
+          <button
+            onClick={() => addToCart(product)}
+            disabled={settings.enableStock !== false && (product.stock === 0 || qty >= product.stock)}
+            style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '4px 12px', fontSize: '18px', fontWeight: 'bold' }}
+          >+</button>
+        </div>
+        {showTotal && qty > 0 && (
+          <div className="qty-total" style={{ fontSize: '13px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            Total: <strong style={{ color: 'var(--primary)' }}>₹{total}</strong>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -170,19 +227,39 @@ function CustomerPage() {
             <FaSearch className="search-icon" />
             <input type="text" placeholder="Search crackers..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          {settings.enableCategories !== false && (
-            <div className="category-tabs">
-              <button className={`cat-tab ${selectedCategory === 'All' ? 'active' : ''}`} onClick={() => setSelectedCategory('All')}>All</button>
-              {activeCats.map((cat) => (
-                <button key={cat} className={`cat-tab ${selectedCategory === cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>{cat}</button>
-              ))}
-            </div>
-          )}
+          <button className={`filter-toggle-btn ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: showFilters ? 'var(--primary)' : 'transparent', color: showFilters ? 'white' : 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'var(--transition)', whiteSpace: 'nowrap' }}>
+            <FaFilter /> Filters {(priceRange !== 'all' || sortBy !== 'default') && <span style={{ background: 'var(--danger)', color: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>!</span>}
+          </button>
           <div className="view-toggle">
             <button className={`view-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><FaList /> Table</button>
             <button className={`view-btn ${viewMode === 'card' ? 'active' : ''}`} onClick={() => setViewMode('card')}><FaThLarge /> Card</button>
           </div>
         </div>
+        {showFilters && (
+          <div className="filter-expanded" style={{ maxWidth: '1400px', margin: '0 auto', padding: '12px 24px 0', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {settings.enableCategories !== false && (
+              <div className="category-tabs">
+                <button className={`cat-tab ${selectedCategory === 'All' ? 'active' : ''}`} onClick={() => setSelectedCategory('All')}>All</button>
+                {activeCats.map((cat) => (
+                  <button key={cat} className={`cat-tab ${selectedCategory === cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>{cat}</button>
+                ))}
+              </div>
+            )}
+            <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', cursor: 'pointer' }}>
+              {priceRanges.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', cursor: 'pointer' }}>
+              <option value="default">Sort: Default</option>
+              <option value="price-low">Price: Low → High</option>
+              <option value="price-high">Price: High → Low</option>
+              <option value="name-az">Name: A → Z</option>
+              <option value="name-za">Name: Z → A</option>
+            </select>
+            {(priceRange !== 'all' || sortBy !== 'default' || selectedCategory !== 'All') && (
+              <button onClick={() => { setPriceRange('all'); setSortBy('default'); setSelectedCategory('All'); }} style={{ padding: '6px 14px', background: 'rgba(255,107,53,0.1)', border: '1px solid rgba(255,107,53,0.3)', borderRadius: 'var(--radius-full)', color: 'var(--primary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>Clear All</button>
+            )}
+          </div>
+        )}
       </section>
 
       {selectedCategory === 'All' && !search && featuredProducts.length > 0 && (
@@ -197,9 +274,9 @@ function CustomerPage() {
                 </div>
                 <h3>{product.name}</h3>
                 {settings.enableCategories !== false && <p className="product-category">{product.category}</p>}
-                <div className="product-rating"><FaStar /> {product.rating}</div>
+                {settings.enableReview !== false && <div className="product-rating"><FaStar /> {product.rating}</div>}
                 <div className="product-price">₹{product.price}</div>
-                <button className="btn-add-cart" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}><FaShoppingCart /> Add to Cart</button>
+                {renderQuantityControl(product)}
               </div>
             ))}
           </div>
@@ -220,10 +297,10 @@ function CustomerPage() {
                 <tr>
                   <th>Product</th>
                   <th>Name</th>
-                  {settings.enableCategories !== false && <th>Category</th>}
                   <th>Price</th>
                   {settings.enableStock !== false && <th>Stock</th>}
                   <th>Action</th>
+                  <th>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,13 +315,13 @@ function CustomerPage() {
                       <div style={{ fontWeight: '600', fontSize: '15px' }}>{product.name}</div>
                       {product.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{product.description}</div>}
                     </td>
-                    {settings.enableCategories !== false && <td><span className="product-category-tag">{product.category}</span></td>}
                     <td className="td-price">₹{product.price}</td>
                     {settings.enableStock !== false && <td><span className="product-stock">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span></td>}
                     <td>
-                      <button className="btn-add-cart-sm" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}>
-                        <FaShoppingCart /> Add
-                      </button>
+                      {renderQuantityControl(product, false)}
+                    </td>
+                    <td className="td-price" style={{ minWidth: '80px' }}>
+                      {cart.find(c => c.id === product.id)?.qty > 0 ? `₹${cart.find(c => c.id === product.id).qty * product.price}` : '—'}
                     </td>
                   </tr>
                 ))}
@@ -263,7 +340,7 @@ function CustomerPage() {
                   <p className="product-desc">{product.description}</p>
                   <div className="product-meta">
                     {settings.enableCategories !== false && <span className="product-category-tag">{product.category}</span>}
-                    <span className="product-rating-sm"><FaStar /> {product.rating}</span>
+                    {settings.enableReview !== false && <span className="product-rating-sm"><FaStar /> {product.rating}</span>}
                   </div>
                   <div className="product-bottom">
                     <span className="product-price-lg">₹{product.price}</span>
@@ -271,9 +348,7 @@ function CustomerPage() {
                       <span className="product-stock">{product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}</span>
                     )}
                   </div>
-                  <button className="btn-add-cart-sm" onClick={() => addToCart(product)} disabled={settings.enableStock !== false && product.stock === 0}>
-                    <FaShoppingCart /> Add to Cart
-                  </button>
+                  {renderQuantityControl(product)}
                 </div>
               </div>
             ))}
@@ -295,15 +370,35 @@ function CustomerPage() {
               <>
                 <div className="cart-items">
                   {cart.map((item) => (
-                    <div key={item.id} className="cart-item">
-                      <span className="cart-item-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px' }}>
-                        {renderProductImage(item.image, 'cart')}
-                      </span>
-                      <div className="cart-item-info">
-                        <span className="cart-item-name">{item.name}</span>
-                        <span className="cart-item-price">₹{item.price} × {item.qty}</span>
+                    <div key={item.id} className="cart-item" style={{ flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                        <span className="cart-item-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', flexShrink: 0 }}>
+                          {renderProductImage(item.image, 'cart')}
+                        </span>
+                        <div className="cart-item-info" style={{ flex: 1 }}>
+                          <span className="cart-item-name">{item.name}</span>
+                          <span className="cart-item-price">₹{item.price} each</span>
+                        </div>
+                        <button className="cart-item-remove" onClick={() => removeFromCart(item.id)}>✕</button>
                       </div>
-                      <button className="cart-item-remove" onClick={() => removeFromCart(item.id)}>✕</button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingLeft: '52px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                          <button
+                            onClick={() => {
+                              if (item.qty === 1) removeFromCart(item.id);
+                              else setCart(prev => prev.map(c => c.id === item.id ? { ...c, qty: c.qty - 1 } : c));
+                            }}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px 12px', fontSize: '16px', fontWeight: 'bold' }}
+                          >−</button>
+                          <span style={{ fontWeight: '700', fontSize: '14px', minWidth: '28px', textAlign: 'center' }}>{item.qty}</span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            disabled={settings.enableStock !== false && item.qty >= item.stock}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '4px 12px', fontSize: '16px', fontWeight: 'bold' }}
+                          >+</button>
+                        </div>
+                        <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '15px' }}>₹{item.price * item.qty}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -364,7 +459,12 @@ function CustomerPage() {
             </div>
           )}
         </div>
-        <div className="footer-bottom"><p>© 2026 {settings.siteName}. Made with ❤️ in Sivakasi</p></div>
+        <div className="footer-bottom"><p>© 2024 {settings.siteName}. Made by &nbsp;
+          <a href="https://www.wecreates.ltd" target="_blank" rel="noopener noreferrer" style={{ fontFamily: "Arial", fontSize: "14px", color: "inherit" }}>
+            <h2 style={{ color: "var(--primary-dark)" }}>wecreates.ltd</h2>
+          </a>
+          <h4>📞 +91 8015223596  | 📧 wecreates.ltd@gmail.com</h4></p>
+        </div>
       </footer>
     </div>
   );

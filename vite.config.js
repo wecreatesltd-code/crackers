@@ -55,4 +55,7 @@ function jsonStorePlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), jsonStorePlugin()],
+  server: {
+    allowedHosts: ['.ngrok-free.dev', 'confider-bristle-wackiness.ngrok-free.dev'],
+  }
 })
